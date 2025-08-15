@@ -43,9 +43,14 @@ jobs:
             AUTHOR_EMAIL=$(git show -s --format='%ae' $commit)
 
             if [ "$AUTHOR_EMAIL" != "gshubham804@gmail.com" ]; then
-              GIT_COMMITTER_DATE="$(git show -s --format=%ci $commit)" \
+              COMMIT_DATE="$(git show -s --format=%ci $commit)"
+              if [ -z "$COMMIT_DATE" ]; then
+                COMMIT_DATE="$(date -R)"
+              fi
+
+              GIT_COMMITTER_DATE="$COMMIT_DATE" \
               git rebase --rebase-merges --onto $commit^ $commit \
-                --exec "git commit --amend --no-edit --author='gshubham804 <gshubham804@gmail.com>' --date \"$GIT_COMMITTER_DATE\""
+                --exec "git commit --amend --no-edit --author='gshubham804 <gshubham804@gmail.com>' --date \"$COMMIT_DATE\""
             fi
           done
 
