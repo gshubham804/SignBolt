@@ -1,0 +1,47 @@
+name: Normalize Commit Authors (Smart)
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+      - feature/**
+
+jobs:
+  normalize-authors:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "gshubham804"
+          git config user.email "gshubham804@gmail.com"
+
+      - name: Rewrite authors only for new commits
+        run: |
+          # Find commit range in this push
+          if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            # New branch push
+            RANGE=$(git rev-list --reverse HEAD)
+          else
+            RANGE=$(git rev-list --reverse ${{ github.event.before }}..HEAD)
+          fi
+
+          # Loop through each commit in the range
+          for commit in $RANGE; do
+            AUTHOR_NAME=$(git show -s --format='%an' $commit)
+            AUTHOR_EMAIL=$(git show -s --format='%ae' $commit)
+
+            # If author doesn't match personal account, rewrite
+            if [ "$AUTHOR_EMAIL" != "gshubham804@gmail.com" ]; then
+              git rebase -p --onto $commit^ $commit --exec "git commit --amend --no-edit --author='Your Personal GitHub Username <gshubham804@gmail.com>'"
+            fi
+          done
+
+      - name: Force push rewritten branch
+        run: git push --force
