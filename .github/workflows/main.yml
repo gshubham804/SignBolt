@@ -1,4 +1,4 @@
-name: Normalize Commit Authors (Smart)
+name: Normalize Commit Authors (Smart Non-Interactive)
 
 on:
   push:
@@ -25,36 +25,28 @@ jobs:
           git config user.name "gshubham804"
           git config user.email "gshubham804@gmail.com"
 
-      - name: Prepare rebase script
-        run: |
-          cat > /tmp/rewrite-author.sh <<'EOF'
-          #!/usr/bin/env bash
-          if git diff-tree --no-commit-id --name-only -r HEAD | grep -q '^.github/workflows/'; then
-            echo "Skipping workflow commit"
-            exit 0
-          fi
-
-          AUTHOR_EMAIL=$(git show -s --format='%ae' HEAD)
-          if [ "$AUTHOR_EMAIL" != "gshubham804@gmail.com" ]; then
-            COMMIT_DATE=$(git show -s --format=%ci HEAD)
-            if [ -z "$COMMIT_DATE" ]; then
-              COMMIT_DATE=$(date -R)
-            fi
-            GIT_COMMITTER_DATE="$COMMIT_DATE" git commit --amend --no-edit \
-              --author='gshubham804 <gshubham804@gmail.com>' --date "$COMMIT_DATE"
-          fi
-          EOF
-          chmod +x /tmp/rewrite-author.sh
-
-      - name: Rewrite authors
+      - name: Rewrite authors only for this push
         run: |
           if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
-            START=$(git rev-list --max-parents=0 HEAD)
+            RANGE=$(git rev-list --reverse HEAD)
           else
-            START=${{ github.event.before }}
+            RANGE=$(git rev-list --reverse ${{ github.event.before }}..HEAD)
           fi
 
-          git rebase -i --rebase-merges --exec "/tmp/rewrite-author.sh" "$START"^ --no-autostash
+          for commit in $RANGE; do
+            if git diff-tree --no-commit-id --name-only -r $commit | grep -q '^.github/workflows/'; then
+              echo "Skipping $commit (workflow file changes)"
+              continue
+            fi
+
+            AUTHOR_EMAIL=$(git show -s --format='%ae' $commit)
+            if [ "$AUTHOR_EMAIL" != "gshubham804@gmail.com" ]; then
+              COMMIT_DATE=$(git show -s --format=%ci $commit)
+              GIT_COMMITTER_DATE="$COMMIT_DATE" git commit --amend --no-edit \
+                --author="gshubham804 <gshubham804@gmail.com>" --date "$COMMIT_DATE" \
+                --allow-empty
+            fi
+          done
 
       - name: Force push rewritten branch
         run: git push --force
