@@ -7,6 +7,9 @@ on:
       - dev
       - feature/**
 
+permissions:
+  contents: write
+
 jobs:
   normalize-authors:
     runs-on: ubuntu-latest
