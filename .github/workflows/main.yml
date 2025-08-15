@@ -7,6 +7,10 @@ on:
       - dev
       - feature/**
 
+permissions:
+  contents: write
+  workflows: write
+
 jobs:
   normalize-authors:
     runs-on: ubuntu-latest
@@ -39,7 +43,7 @@ jobs:
 
             # If author doesn't match personal account, rewrite
             if [ "$AUTHOR_EMAIL" != "gshubham804@gmail.com" ]; then
-              git rebase -p --onto $commit^ $commit --exec "git commit --amend --no-edit --author='Your Personal GitHub Username <gshubham804@gmail.com>'"
+              git rebase --rebase-merges --onto $commit^ $commit --exec "git commit --amend --no-edit --author='Your Personal GitHub Username <gshubham804@gmail.com>'"
             fi
           done
 
