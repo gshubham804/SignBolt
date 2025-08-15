@@ -1,4 +1,4 @@
-name: Normalize Commit Authors (Smart Non-Interactive)
+name: Normalize Commit Authors (Filter-Repo, Range Limited)
 
 on:
   push:
@@ -15,38 +15,45 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout full history
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Configure Git identity
+      - name: Install git-filter-repo
         run: |
-          git config user.name "gshubham804"
-          git config user.email "gshubham804@gmail.com"
+          sudo apt-get update
+          sudo apt-get install -y python3
+          curl -s https://raw.githubusercontent.com/newren/git-filter-repo/main/git-filter-repo > /usr/local/bin/git-filter-repo
+          chmod +x /usr/local/bin/git-filter-repo
 
-      - name: Rewrite authors only for this push
+      - name: Rewrite commit authors for recent push
         run: |
+          # Get commit range from GitHub push event
           if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
-            RANGE=$(git rev-list --reverse HEAD)
+            RANGE="HEAD"
           else
-            RANGE=$(git rev-list --reverse ${{ github.event.before }}..HEAD)
+            RANGE="${{ github.event.before }}..HEAD"
           fi
 
-          for commit in $RANGE; do
-            if git diff-tree --no-commit-id --name-only -r $commit | grep -q '^.github/workflows/'; then
-              echo "Skipping $commit (workflow file changes)"
-              continue
-            fi
+          # Create a temporary branch with only the recent commits
+          git checkout -b temp-rewrite
+          git reset --hard ${{ github.event.before }}
 
-            AUTHOR_EMAIL=$(git show -s --format='%ae' $commit)
-            if [ "$AUTHOR_EMAIL" != "gshubham804@gmail.com" ]; then
-              COMMIT_DATE=$(git show -s --format=%ci $commit)
-              GIT_COMMITTER_DATE="$COMMIT_DATE" git commit --amend --no-edit \
-                --author="gshubham804 <gshubham804@gmail.com>" --date "$COMMIT_DATE" \
-                --allow-empty
+          # Cherry-pick commits into a clean branch, rewriting author
+          git checkout -b fixed-branch ${{ github.event.before }}
+          for commit in $(git rev-list --reverse $RANGE); do
+            AUTHOR_EMAIL=$(git show -s --format='%ae' "$commit")
+            GIT_COMMITTER_DATE="$(git show -s --format=%ci $commit)"
+            if [ "$AUTHOR_EMAIL" = "shubham.gupta@poxscan.io" ]; then
+              git cherry-pick --allow-empty --keep-redundant-commits "$commit"
+              git commit --amend --no-edit --author="gshubham804 <gshubham804@gmail.com>" --date "$GIT_COMMITTER_DATE"
+            else
+              git cherry-pick --allow-empty --keep-redundant-commits "$commit"
             fi
           done
+
+          git branch -M fixed-branch main
 
       - name: Force push rewritten branch
         run: git push --force
