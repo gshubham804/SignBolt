@@ -9,7 +9,6 @@ on:
 
 permissions:
   contents: write
-  workflows: write
 
 jobs:
   normalize-authors:
@@ -21,29 +20,32 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Configure Git
+      - name: Configure Git identity
         run: |
           git config user.name "gshubham804"
           git config user.email "gshubham804@gmail.com"
 
-      - name: Rewrite authors only for new commits
+      - name: Rewrite authors only for new commits (skip workflow files)
         run: |
-          # Find commit range in this push
           if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
-            # New branch push
             RANGE=$(git rev-list --reverse HEAD)
           else
             RANGE=$(git rev-list --reverse ${{ github.event.before }}..HEAD)
           fi
 
-          # Loop through each commit in the range
           for commit in $RANGE; do
-            AUTHOR_NAME=$(git show -s --format='%an' $commit)
+            # Skip commits that modify workflow files
+            if git diff-tree --no-commit-id --name-only -r $commit | grep -q '^.github/workflows/'; then
+              echo "Skipping $commit (workflow file changes)"
+              continue
+            fi
+
             AUTHOR_EMAIL=$(git show -s --format='%ae' $commit)
 
-            # If author doesn't match personal account, rewrite
             if [ "$AUTHOR_EMAIL" != "gshubham804@gmail.com" ]; then
-              git rebase --rebase-merges --onto $commit^ $commit --exec "git commit --amend --no-edit --author='Your Personal GitHub Username <gshubham804@gmail.com>'"
+              GIT_COMMITTER_DATE="$(git show -s --format=%ci $commit)" \
+              git rebase --rebase-merges --onto $commit^ $commit \
+                --exec "git commit --amend --no-edit --author='gshubham804 <gshubham804@gmail.com>' --date \"$GIT_COMMITTER_DATE\""
             fi
           done
 
