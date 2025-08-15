@@ -25,7 +25,28 @@ jobs:
           git config user.name "gshubham804"
           git config user.email "gshubham804@gmail.com"
 
-      - name: Rewrite all incorrect authors in range
+      - name: Prepare rebase script
+        run: |
+          cat > /tmp/rewrite-author.sh <<'EOF'
+          #!/usr/bin/env bash
+          if git diff-tree --no-commit-id --name-only -r HEAD | grep -q '^.github/workflows/'; then
+            echo "Skipping workflow commit"
+            exit 0
+          fi
+
+          AUTHOR_EMAIL=$(git show -s --format='%ae' HEAD)
+          if [ "$AUTHOR_EMAIL" != "gshubham804@gmail.com" ]; then
+            COMMIT_DATE=$(git show -s --format=%ci HEAD)
+            if [ -z "$COMMIT_DATE" ]; then
+              COMMIT_DATE=$(date -R)
+            fi
+            GIT_COMMITTER_DATE="$COMMIT_DATE" git commit --amend --no-edit \
+              --author='gshubham804 <gshubham804@gmail.com>' --date "$COMMIT_DATE"
+          fi
+          EOF
+          chmod +x /tmp/rewrite-author.sh
+
+      - name: Rewrite authors
         run: |
           if [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
             START=$(git rev-list --max-parents=0 HEAD)
@@ -33,21 +54,7 @@ jobs:
             START=${{ github.event.before }}
           fi
 
-          # Skip workflow commits by marking them with env var during rebase
-          git rebase -i --rebase-merges --exec "
-            if git diff-tree --no-commit-id --name-only -r HEAD | grep -q '^.github/workflows/'; then
-              echo 'Skipping workflow commit';
-            else
-              AUTHOR_EMAIL=\$(git show -s --format='%ae' HEAD)
-              if [ \"\$AUTHOR_EMAIL\" != 'gshubham804@gmail.com' ]; then
-                COMMIT_DATE=\$(git show -s --format=%ci HEAD)
-                if [ -z \"\$COMMIT_DATE\" ]; then
-                  COMMIT_DATE=\$(date -R)
-                fi
-                GIT_COMMITTER_DATE=\"\$COMMIT_DATE\" git commit --amend --no-edit --author='gshubham804 <gshubham804@gmail.com>' --date \"\$COMMIT_DATE\"
-              fi
-            fi
-          " $START^ --no-autostash
+          git rebase -i --rebase-merges --exec "/tmp/rewrite-author.sh" "$START"^ --no-autostash
 
       - name: Force push rewritten branch
         run: git push --force
